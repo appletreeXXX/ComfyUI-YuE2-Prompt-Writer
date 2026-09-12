@@ -1,0 +1,21 @@
+[project]
+name = "yue2-prompt-writer"
+version = "0.3.0"
+description = "YuE2-3B prompt-writing workspace for ComfyUI: lyrics + genre + vocal setting in, style prompt / lyric sheet / generation JSON out."
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+dependencies = []
+
+[project.urls]
+Repository = "https://github.com/example/ComfyUI-YuE2-Prompt-Writer"
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+# ComfyUI Registry metadata. Fill in PublisherId before publishing:
+#   comfy node publish
+[tool.comfy]
+PublisherId = ""
+DisplayName = "ComfyUI YuE2 Prompt Writer"
+Icon = ""

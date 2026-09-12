@@ -1,0 +1,3 @@
+# ComfyUI YuE2 Prompt Writer runs on the aiohttp server bundled with ComfyUI and
+# on the Python standard library only. Model weights are downloaded separately
+# by the YuE2 pipeline itself (m-a-p/YuE2-3B), not by this extension.

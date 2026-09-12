@@ -1,0 +1,8 @@
+__pycache__/
+*.py[cod]
+tests/
+docs/
+.github/
+.gitignore
+.gitattributes
+CHANGELOG.md
