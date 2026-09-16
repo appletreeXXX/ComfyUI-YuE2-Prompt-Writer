@@ -132,6 +132,8 @@
   border-radius: 10px;
   padding: 12px;
   background: var(--yue2-surface);
+  /* Same reason as .yue2-output: never let the flex column squash a section. */
+  flex: 0 0 auto;
 }
 
 .yue2-section > h3 {
@@ -270,6 +272,11 @@ button {
   overflow: hidden;
   background: var(--yue2-surface);
   min-width: 0;
+  /* The column is a fixed-height flex container. Without this each block gets
+     squeezed as soon as the total content is taller than the viewport, and the
+     rows collapse into each other; the column's own scrollbar is what should
+     absorb the overflow. */
+  flex: 0 0 auto;
 }
 
 .yue2-output-head {

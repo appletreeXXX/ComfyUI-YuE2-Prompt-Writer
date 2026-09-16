@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<!--
+  面板级视觉验证：复刻 .yue2-panel 的完整结构（header + 固定高 body + 双列），
+  用真实 CSS 渲染，专门回归「输出块被 flex 压缩、互相重叠」这个 bug。
+
+  判定标准：每个 .yue2-output 的实际高度必须 >= 其内容所需高度，
+  且相邻块不能重叠。页面把量化结论写进标题，截图时可读。
+
+  用法：
+    msedge --headless=new --window-size=1100,760 --screenshot out.png panel.html
+-->
+<head>
+<meta charset="utf-8">
+<title>YuE2 面板 — 重叠回归验证</title>
+<link rel="stylesheet" href="../web/styles/yue2.css">
+<style>
+  /* ComfyUI 的全局按钮重置：不带 color 的 bare reset，是要活下来的敌意场景 */
+  button { font-family: inherit; }
+  body { margin: 0; background: #eceef3; }
+  /* The panel is position: fixed in production; pin it here instead. */
+  .yue2-panel { position: static; transform: none; margin: 12px auto; }
+  .verdict { position: fixed; left: 0; top: 0; right: 0; z-index: 9;
+             padding: 6px 12px; font: 600 12px/1.5 "Segoe UI", sans-serif; }
+  .verdict[data-ok="true"]  { background: #e8f7ee; color: #1c6b3a; }
+  .verdict[data-ok="false"] { background: #fdecec; color: #a12b2b; }
+</style>
+</head>
+<body>
+<p class="verdict" id="verdict">measuring…</p>
+<div id="mount"></div>
+<script>
+// Reproduce the exact footer markup the extension builds, at production sizes.
+const COLLAPSE_THRESHOLD = 600;
+const OUTPUTS = [
+  { key: "style", title: "① Style 提示词" },
+  { key: "normalized_lyrics", title: "② 规范化歌词" },
+  { key: "annotated_lyrics", title: "③ 带声部标注的歌词" },
+  { key: "vocal_arrangement", title: "④ 人声编排建议" },
+  { key: "json", title: "⑤ YuE2 JSON" },
+  { key: "python_snippet", title: "⑥ Python 调用片段" },
+];
+const PAYLOAD = {
+  style: "City Pop, Mandarin, female lead vocal, groovy bass, electric guitar, Rhodes piano, tight drums, synth, neon city night, summer evening, nostalgic, reflective, mid-tempo, syncopated groove, glossy 80s production",
+  normalized_lyrics: "[Intro]\n\n[Verse 1]\n炭火在旧铁架上跳动\n烟灰落在鞋面像雪\n\n[Chorus]\n我们就这么坐在这\n吃一串又一串羊肉\n\n[Outro]",
+  annotated_lyrics: "[Intro] · Instrumental\n\n[Verse 1] · Female\n炭火在旧铁架上跳动\n烟灰落在鞋面像雪\n\n[Chorus] · Female + Harmony\n我们就这么坐在这\n吃一串又一串羊肉",
+  vocal_arrangement: "主唱：女声\n和声：副歌加三度上叠\n声部进入：第 1 段单独人声，副歌加入和声\n",
+  json: JSON.stringify({
+    genre: "City Pop", language: "Mandarin", vocal: "female lead vocal",
+    section: Array.from({ length: 12 }, (_, i) => `段落 ${i + 1}：炭火在旧铁架上跳动，烟灰落在鞋面像雪`),
+    production: "glossy 80s production, gated reverb, analog chorus",
+  }, null, 2),
+  python_snippet: "import json\npayload = json.loads(open('yue2.json').read())\nprint(payload['genre'])",
+};
+
+const mount = document.getElementById("mount");
+const panel = document.createElement("section");
+panel.className = "yue2-panel";
+panel.innerHTML = `
+  <header class="yue2-header">
+    <h2>YuE2 提示词工作台</h2>
+    <span class="yue2-version">v0.3.0</span>
+    <span class="yue2-spacer"></span>
+    <button class="yue2-button">本地预览</button>
+    <button class="yue2-button yue2-button-primary">AI 生成提示词</button>
+    <button class="yue2-button">关闭</button>
+  </header>
+  <div class="yue2-body">
+    <div class="yue2-column">
+      <div class="yue2-section"><h3>歌词</h3>
+        <div class="yue2-lyrics-box">谈笑间天要变暗</div></div>
+      <div class="yue2-section"><h3>写作模型 (PROVIDER)</h3>
+        <div class="yue2-field"><label>类型</label><div>Local GGUF</div></div>
+        <div class="yue2-field"><label>模型</label><div>5.24 GB · qwen3.5-9b</div></div>
+      </div>
+    </div>
+    <div class="yue2-column" data-outputs></div>
+  </div>`;
+mount.appendChild(panel);
+
+const container = panel.querySelector("[data-outputs]");
+for (const output of OUTPUTS) {
+  const value = PAYLOAD[output.key];
+  const block = document.createElement("div");
+  block.className = "yue2-output";
+  const collapsible = value.length > COLLAPSE_THRESHOLD;
+  if (collapsible) block.dataset.collapsed = "true";
+  block.innerHTML = `
+    <div class="yue2-output-head">
+      <h4>${output.title}</h4>
+      <span class="yue2-spacer"></span>
+      ${collapsible ? `<button type="button" class="yue2-toggle">展开全文</button>` : ""}
+      <button type="button" class="yue2-copy">复制</button>
+    </div>
+    <pre></pre>`;
+  block.querySelector("pre").textContent = value;
+  container.appendChild(block);
+}
+
+// Measure: every block must be as tall as it needs, and blocks must not overlap.
+requestAnimationFrame(() => {
+  const blocks = [...container.querySelectorAll(".yue2-output")];
+  const problems = [];
+  let prevBottom = null;
+
+  for (const block of blocks) {
+    const head = block.querySelector(".yue2-output-head");
+    const pre = block.querySelector("pre");
+    const needed = head.getBoundingClientRect().height +
+                   pre.scrollHeight + 1; // head + full content
+    const actual = block.getBoundingClientRect().height;
+
+    // Collapsed blocks legitimately clip, so only check un-collapsed ones.
+    if (block.dataset.collapsed !== "true" && actual + 1 < needed) {
+      problems.push(`${block.querySelector("h4").textContent} 被压缩 ${Math.round(actual)}<${Math.round(needed)}`);
+    }
+    const top = block.getBoundingClientRect().top;
+    if (prevBottom !== null && top + 1 < prevBottom) {
+      problems.push(`${block.querySelector("h4").textContent} 与前一块重叠`);
+    }
+    prevBottom = block.getBoundingClientRect().bottom;
+  }
+
+  const verdict = document.getElementById("verdict");
+  verdict.dataset.ok = String(problems.length === 0);
+  verdict.textContent = problems.length === 0
+    ? `无重叠、无压缩 — ${blocks.length} 个输出块，列可滚动高度 ${container.scrollHeight}px / 可视 ${container.clientHeight}px`
+    : `问题：${problems.join("；")}`;
+});
+</script>
+</body>
+</html>

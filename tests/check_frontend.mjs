@@ -112,6 +112,32 @@ if (!/min-width:\s*0/.test(
   console.log("  ok   web/styles/yue2.css: .yue2-column can shrink (min-width: 0)");
 }
 
+// 3. Blocks stacked in a fixed-height flex column must refuse to shrink.
+//    Without flex-shrink: 0, a column whose content is taller than the panel
+//    squashes every block into a few pixels and they visually overlap; the
+//    column's own scrollbar is what should absorb the overflow.
+function ruleBody(selector) {
+  const match = css.match(
+    new RegExp(`${selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\{([^}]*)\\}`, "s"),
+  );
+  return match ? match[1] : null;
+}
+
+for (const selector of [".yue2-output", ".yue2-section"]) {
+  const body = ruleBody(selector);
+  if (body === null) {
+    failed += 1;
+    console.log(`  FAIL web/styles/yue2.css: ${selector} rule is missing`);
+  } else if (!/flex:\s*0\s+0\s+auto|flex-shrink:\s*0/.test(body)) {
+    failed += 1;
+    console.log(
+      `  FAIL web/styles/yue2.css: ${selector} must set flex: 0 0 auto (or flex-shrink: 0)`,
+    );
+  } else {
+    console.log(`  ok   web/styles/yue2.css: ${selector} resists flex squashing`);
+  }
+}
+
 // The CSS must not have obviously unbalanced braces.
 const open = (css.match(/\{/g) || []).length;
 const close = (css.match(/\}/g) || []).length;

@@ -331,16 +331,23 @@ python tests/run_local_model_check.py --idea "雨夜开车"  # 一次加载跑�
 - `check_frontend.mjs` — 前端 ES 模块语法、模板字符串与 CSS 括号配平，外加输出区的回归
   断言：复制按钮必须带「复制」二字、`.yue2-copy` / `.yue2-toggle` 必须显式声明 `color`
   与字号（否则会被 ComfyUI 的全局按钮重置吃掉）、输出不得再被固定 `max-height` 裁剪、
-  长内容折叠与展开控件必须存在、`.yue2-column` 必须能收缩（`min-width: 0`）。
+  长内容折叠与展开控件必须存在、`.yue2-column` 必须能收缩（`min-width: 0`）、
+  `.yue2-output` 与 `.yue2-section` 必须 `flex: 0 0 auto`（否则固定高的 flex 列会把
+  它们压扁到一起）。
 
 ### 视觉验证（可选，不需要 ComfyUI）
 
-`tests/preview.html` 直接用 `web/styles/yue2.css` 渲染一个短输出块和一个长输出块，
-在浏览器里打开即可肉眼确认「复制」按钮可见、长内容折叠/展开正常：
+两个页面直接 `<link>` 真实的 `web/styles/yue2.css`，在浏览器里打开即可：
+
+- `tests/preview.html` — 单个输出块：确认「复制」按钮可见、长内容折叠/展开正常。
+- `tests/preview-panel.html` — 完整面板（header + 固定高双列 + 6 个输出块）：
+  页面会把量化结论写进顶部横幅，判定每个块是否被压缩或与相邻块重叠。
+  内容超过面板高度时，**必须由列的滚动条承载，而不是把块压扁**。
 
 ```bash
 # Windows，用系统自带的 Edge，无需安装任何依赖
 msedge --headless=new --window-size=760,1100 --screenshot out.png tests/preview.html
+msedge --headless=new --window-size=1100,780 --screenshot panel.png tests/preview-panel.html
 ```
 
 `run_local_model_check.py` 是可选的实机冒烟测试：挑一个真实 GGUF 加载到 GPU，分别计时
