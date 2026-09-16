@@ -20,6 +20,10 @@ const LAUNCHER_KEY = "yue2PromptWriter.launcher.v1";
 const DRAFT_KEY = "yue2PromptWriter.draft.v1";
 const DRAG_THRESHOLD_PX = 4;
 
+// Output longer than this starts collapsed, so one long block cannot push the
+// rest of the panel out of reach; the reader expands it in place.
+const COLLAPSE_THRESHOLD = 600;
+
 const state = {
   open: false,
   catalog: null,
@@ -447,14 +451,41 @@ function renderResult() {
     if (!value) continue;
     const block = document.createElement("div");
     block.className = "yue2-output";
+    const collapsible = value.length > COLLAPSE_THRESHOLD;
+    if (collapsible) block.dataset.collapsed = "true";
     block.innerHTML = `
       <div class="yue2-output-head">
         <h4>${output.title}</h4>
         <span class="yue2-spacer"></span>
+        ${
+          collapsible
+            ? `<button type="button" class="yue2-toggle" data-expanded="false"
+                 aria-expanded="false">展开全文</button>`
+            : ""
+        }
         <button type="button" class="yue2-copy">复制</button>
       </div>
       <pre></pre>`;
     block.querySelector("pre").textContent = value;
+
+    const toggleButton = block.querySelector(".yue2-toggle");
+    if (toggleButton) {
+      toggleButton.addEventListener("click", () => {
+        const collapsed = block.dataset.collapsed === "true";
+        if (collapsed) {
+          delete block.dataset.collapsed;
+          toggleButton.textContent = "收起";
+          toggleButton.dataset.expanded = "true";
+          toggleButton.setAttribute("aria-expanded", "true");
+        } else {
+          block.dataset.collapsed = "true";
+          toggleButton.textContent = "展开全文";
+          toggleButton.dataset.expanded = "false";
+          toggleButton.setAttribute("aria-expanded", "false");
+        }
+      });
+    }
+
     const copyButton = block.querySelector(".yue2-copy");
     copyButton.addEventListener("click", async () => {
       try {

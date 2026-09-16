@@ -5,9 +5,16 @@ so they run inside ComfyUI's own interpreter with no test framework installed.
 
     python tests/run_all.py
 
+Run this with **ComfyUI's own interpreter** (the ``python_embeded`` that ships
+with the portable build). ``backend/models/_http.py`` imports ``aiohttp``, which
+ComfyUI provides but a plain system Python does not, so starting this script with
+the wrong interpreter reports three spurious failures. The pre-flight below says
+so explicitly instead of letting you chase a phantom bug.
+
 ``check_frontend.mjs`` needs Node and is skipped when it is absent.
 """
 
+import importlib.util
 import shutil
 import subprocess
 import sys
@@ -26,8 +33,33 @@ CHECKS = [
     ("frontend syntax", "check_frontend.mjs", True),
 ]
 
+REQUIRED = ["aiohttp"]
+
+
+def preflight() -> bool:
+    """ComfyUI's interpreter supplies aiohttp; a bare system Python does not."""
+    missing = [
+        name for name in REQUIRED if importlib.util.find_spec(name) is None
+    ]
+    if not missing:
+        return True
+    print("=" * 68)
+    print("wrong interpreter")
+    print("=" * 68)
+    print(f"  {sys.executable}")
+    print(f"  missing: {', '.join(missing)}")
+    print()
+    print("  This extension imports aiohttp, which ships with ComfyUI.")
+    print("  Re-run with ComfyUI's bundled interpreter, e.g. on Windows:")
+    print("    E:\\ComfyUI\\python_embeded\\python.exe tests/run_all.py")
+    print()
+    return False
+
 
 def main() -> int:
+    if not preflight():
+        return 1
+
     node = shutil.which("node")
     results = []
     for label, script, needs_node in CHECKS:

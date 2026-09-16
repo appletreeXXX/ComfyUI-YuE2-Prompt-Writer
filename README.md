@@ -305,6 +305,14 @@ python tests/run_local_model_check.py --idea "雨夜开车"  # 一次加载跑�
 
 `tests/run_all.py` 会跳过需要 Node 的前端语法检查（`check_frontend.mjs`）如果 PATH 里没有 `node`。
 
+> **用 ComfyUI 自带的解释器跑测试。** `backend/models/_http.py` 依赖 `aiohttp`，它随 ComfyUI
+> 一起提供，普通系统 Python 里没有。用错解释器会看到 3 个「失败」，那其实是环境问题而非代码
+> 问题——`run_all.py` 现在会在开跑前检查并明确提示：
+>
+> ```bash
+> E:\ComfyUI\python_embeded\python.exe tests/run_all.py
+> ```
+
 各检查脚本覆盖的内容：
 
 - `run_tests.py` — 歌词解析与段落编号规则（重复段落不编号）、中英日韩粤语检测、声部分配、
@@ -320,7 +328,20 @@ python tests/run_local_model_check.py --idea "雨夜开车"  # 一次加载跑�
 - `run_api_tests.py` — 把 `backend/routes.py` 真正启动起来跑真实 HTTP，覆盖健康检查、
   目录、指南（含 404）、plan、歌词分析、本地预览、模型清单、provider 探针（含不可达）、
   generate 的回退路径、`api_key` 不出现在响应体里。
-- `check_frontend.mjs` — 前端 ES 模块语法、模板字符串与 CSS 括号配平。
+- `check_frontend.mjs` — 前端 ES 模块语法、模板字符串与 CSS 括号配平，外加输出区的回归
+  断言：复制按钮必须带「复制」二字、`.yue2-copy` / `.yue2-toggle` 必须显式声明 `color`
+  与字号（否则会被 ComfyUI 的全局按钮重置吃掉）、输出不得再被固定 `max-height` 裁剪、
+  长内容折叠与展开控件必须存在、`.yue2-column` 必须能收缩（`min-width: 0`）。
+
+### 视觉验证（可选，不需要 ComfyUI）
+
+`tests/preview.html` 直接用 `web/styles/yue2.css` 渲染一个短输出块和一个长输出块，
+在浏览器里打开即可肉眼确认「复制」按钮可见、长内容折叠/展开正常：
+
+```bash
+# Windows，用系统自带的 Edge，无需安装任何依赖
+msedge --headless=new --window-size=760,1100 --screenshot out.png tests/preview.html
+```
 
 `run_local_model_check.py` 是可选的实机冒烟测试：挑一个真实 GGUF 加载到 GPU，分别计时
 加载 / 生成 / 卸载，并确认卸载后显存回到基线。加 `--idea "一句主题"` 会一次加载连着跑完

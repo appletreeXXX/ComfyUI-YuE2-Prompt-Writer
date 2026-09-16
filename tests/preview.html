@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<!--
+  视觉验证页：在浏览器里直接打开即可（无需 ComfyUI）。
+
+  它复用 web/styles/yue2.css 的真实样式和 renderResult() 的渲染结构，
+  渲染一个短输出块和一个长输出块，用来肉眼确认两件事：
+
+    1. .yue2-copy 的「复制」二字确实可见、可点；
+    2. 长输出默认折叠，点「展开全文」后内容完整展开、不被裁剪。
+
+  截图方式（Windows，无需安装额外依赖）：
+    msedge --headless=new --window-size=760,1100 --screenshot out.png preview.html
+-->
+<head>
+<meta charset="utf-8">
+<title>YuE2 工作台输出区 — 视觉验证</title>
+<link rel="stylesheet" href="../web/styles/yue2.css">
+<style>
+  /* Stand in for ComfyUI's own global button reset, which is what swallowed
+     the copy label in the real UI. A bare `button` reset with no colour is the
+     hostile case the extension has to survive. */
+  body { margin: 0; background: #eceef3; font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif; }
+  button { font-family: inherit; }
+  .harness { padding: 20px; display: flex; flex-direction: column; gap: 16px; max-width: 620px; }
+  .harness > h1 { font-size: 15px; margin: 0 0 4px; color: #1f1f24; }
+  .harness-note { font-size: 12px; color: #6b6b76; margin: 0 0 8px; }
+  .yue2-column { border: 1px dashed #b9bce0; border-radius: 10px; padding: 12px; background: #fff; }
+</style>
+</head>
+<body>
+<div class="harness">
+  <h1>输出区视觉验证</h1>
+  <p class="harness-note">下面的区块由页面脚本按 <code>web/main.js</code> 的渲染逻辑生成，直接复用真实 CSS。</p>
+  <div class="yue2-column" id="outputs"></div>
+</div>
+<script>
+// Mirror of renderResult()'s structure, with a short and a long payload so both
+// the normal and the collapsed path are visible at once.
+const COLLAPSE_THRESHOLD = 600;
+const OUTPUTS = [
+  { key: "short", title: "① Style 提示词" },
+  { key: "long", title: "⑤ YuE2 JSON" },
+];
+const SHORT = "City Pop, Mandarin, female lead vocal, groovy bass, electric guitar, Rhodes piano, tight drums";
+const LONG = JSON.stringify({
+  genre: "City Pop",
+  language: "Mandarin",
+  vocal: "female lead vocal",
+  section: Array.from({ length: 14 }, (_, i) => `段落 ${i + 1}：夜晚的霓虹映在湿漉漉的街面上，回声一层层散开`),
+  production: "glossy 80s production, gated reverb, analog chorus",
+}, null, 2);
+
+const container = document.getElementById("outputs");
+for (const output of OUTPUTS) {
+  const value = output.key === "short" ? SHORT : LONG;
+  const block = document.createElement("div");
+  block.className = "yue2-output";
+  const collapsible = value.length > COLLAPSE_THRESHOLD;
+  if (collapsible) block.dataset.collapsed = "true";
+  block.innerHTML = `
+    <div class="yue2-output-head">
+      <h4>${output.title}</h4>
+      <span class="yue2-spacer"></span>
+      ${collapsible ? `<button type="button" class="yue2-toggle" data-expanded="false" aria-expanded="false">展开全文</button>` : ""}
+      <button type="button" class="yue2-copy">复制</button>
+    </div>
+    <pre></pre>`;
+  block.querySelector("pre").textContent = value;
+
+  const toggleButton = block.querySelector(".yue2-toggle");
+  if (toggleButton) {
+    toggleButton.addEventListener("click", () => {
+      const collapsed = block.dataset.collapsed === "true";
+      if (collapsed) {
+        delete block.dataset.collapsed;
+        toggleButton.textContent = "收起";
+        toggleButton.dataset.expanded = "true";
+      } else {
+        block.dataset.collapsed = "true";
+        toggleButton.textContent = "展开全文";
+        toggleButton.dataset.expanded = "false";
+      }
+    });
+  }
+  const copyButton = block.querySelector(".yue2-copy");
+  copyButton.addEventListener("click", () => {
+    copyButton.textContent = "已复制";
+    copyButton.dataset.copied = "true";
+    setTimeout(() => {
+      copyButton.textContent = "复制";
+      delete copyButton.dataset.copied;
+    }, 1500);
+  });
+  container.appendChild(block);
+}
+</script>
+</body>
+</html>
