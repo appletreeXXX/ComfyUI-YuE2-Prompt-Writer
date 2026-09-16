@@ -96,12 +96,40 @@ if (/\.yue2-output pre\s*\{[^}]*max-height:\s*300px/s.test(css)) {
 } else {
   console.log("  ok   web/styles/yue2.css: output is not clamped to 300px");
 }
-if (!/COLLAPSE_THRESHOLD/.test(mainSource) ||
-    !/\.yue2-output\[data-collapsed="true"\]\s*pre/.test(css)) {
+
+// Every block collapses, not just the long ones, so the panel reads as a tidy
+// list of the six outputs. The toggle must be rendered unconditionally and the
+// collapsed state must actually hide the body.
+if (!/state\.expanded/.test(mainSource)) {
   failed += 1;
-  console.log("  FAIL collapse/expand path for long output is missing");
+  console.log("  FAIL web/main.js: expanded-state tracking is missing");
 } else {
-  console.log("  ok   long output collapses with an expand control");
+  console.log("  ok   web/main.js: tracks which blocks are expanded");
+}
+if (/value\.length\s*>\s*COLLAPSE_THRESHOLD/.test(mainSource) ||
+    /COLLAPSE_THRESHOLD/.test(mainSource)) {
+  failed += 1;
+  console.log("  FAIL web/main.js: collapse is still decided by length");
+} else {
+  console.log("  ok   web/main.js: every block collapses regardless of length");
+}
+if (!/class="yue2-toggle"/.test(mainSource)) {
+  failed += 1;
+  console.log("  FAIL web/main.js: blocks are not given a toggle control");
+} else {
+  console.log("  ok   web/main.js: every block renders a toggle control");
+}
+if (!/\.yue2-output\[data-collapsed="true"\]\s*pre\s*\{[^}]*display:\s*none/s.test(css)) {
+  failed += 1;
+  console.log("  FAIL web/styles/yue2.css: collapsed blocks do not hide their body");
+} else {
+  console.log("  ok   web/styles/yue2.css: collapsed blocks hide their body");
+}
+if (!/\.yue2-chevron/.test(css) || !/yue2-chevron/.test(mainSource)) {
+  failed += 1;
+  console.log("  FAIL web/styles/yue2.css: the expand affordance (chevron) is missing");
+} else {
+  console.log("  ok   collapsible headers show a chevron affordance");
 }
 if (!/min-width:\s*0/.test(
   (css.match(/\.yue2-column\s*\{[^}]*\}/s) || [""])[0],

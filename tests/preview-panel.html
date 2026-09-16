@@ -9,6 +9,10 @@
 
   用法：
     msedge --headless=new --window-size=1100,760 --screenshot out.png panel.html
+    msedge --headless=new --window-size=1100,760 --screenshot out.png "panel.html?expand=1"
+
+  默认呈现折叠态（用户打开面板时看到的样子）；加 ?expand=1 会先把所有块展开，
+  用来确认展开后每块完整撑开、互不重叠。两种情况下页面都会把量化结论写进顶部横幅。
 -->
 <head>
 <meta charset="utf-8">
@@ -31,7 +35,6 @@
 <div id="mount"></div>
 <script>
 // Reproduce the exact footer markup the extension builds, at production sizes.
-const COLLAPSE_THRESHOLD = 600;
 const OUTPUTS = [
   { key: "style", title: "① Style 提示词" },
   { key: "normalized_lyrics", title: "② 规范化歌词" },
@@ -83,22 +86,43 @@ for (const output of OUTPUTS) {
   const value = PAYLOAD[output.key];
   const block = document.createElement("div");
   block.className = "yue2-output";
-  const collapsible = value.length > COLLAPSE_THRESHOLD;
-  if (collapsible) block.dataset.collapsed = "true";
+  // Mirrors renderResult(): every block collapses the same way, all start
+  // collapsed, and the whole header toggles.
+  block.dataset.collapsed = "true";
   block.innerHTML = `
-    <div class="yue2-output-head">
+    <div class="yue2-output-head" role="button" tabindex="0" aria-expanded="false">
+      <span class="yue2-chevron" aria-hidden="true"></span>
       <h4>${output.title}</h4>
       <span class="yue2-spacer"></span>
-      ${collapsible ? `<button type="button" class="yue2-toggle">展开全文</button>` : ""}
+      <button type="button" class="yue2-toggle" data-expanded="false">展开</button>
       <button type="button" class="yue2-copy">复制</button>
     </div>
     <pre></pre>`;
   block.querySelector("pre").textContent = value;
+
+  const head = block.querySelector(".yue2-output-head");
+  const toggleButton = block.querySelector(".yue2-toggle");
+  const setExpanded = (next) => {
+    if (next) delete block.dataset.collapsed;
+    else block.dataset.collapsed = "true";
+    toggleButton.textContent = next ? "收起" : "展开";
+    toggleButton.dataset.expanded = String(next);
+    head.setAttribute("aria-expanded", String(next));
+  };
+  toggleButton.addEventListener("click", (e) => {
+    e.stopPropagation();
+    setExpanded(block.dataset.collapsed === "true");
+  });
+  head.addEventListener("click", (e) => {
+    if (e.target.closest(".yue2-copy")) return;
+    setExpanded(block.dataset.collapsed === "true");
+  });
   container.appendChild(block);
 }
 
-// Measure: every block must be as tall as it needs, and blocks must not overlap.
-requestAnimationFrame(() => {
+// Scenario A: everything collapsed — must be a tidy list, no overlap.
+// Scenario B: everything expanded — blocks must each be as tall as they need.
+function measure(label) {
   const blocks = [...container.querySelectorAll(".yue2-output")];
   const problems = [];
   let prevBottom = null;
@@ -106,13 +130,16 @@ requestAnimationFrame(() => {
   for (const block of blocks) {
     const head = block.querySelector(".yue2-output-head");
     const pre = block.querySelector("pre");
-    const needed = head.getBoundingClientRect().height +
-                   pre.scrollHeight + 1; // head + full content
+    const headHeight = head.getBoundingClientRect().height;
+    const collapsed = block.dataset.collapsed === "true";
+    // Collapsed hides the body, so the block only needs the header row.
+    const needed = collapsed ? headHeight - 1 : headHeight + pre.scrollHeight + 1;
     const actual = block.getBoundingClientRect().height;
 
-    // Collapsed blocks legitimately clip, so only check un-collapsed ones.
-    if (block.dataset.collapsed !== "true" && actual + 1 < needed) {
-      problems.push(`${block.querySelector("h4").textContent} 被压缩 ${Math.round(actual)}<${Math.round(needed)}`);
+    if (actual + 1 < needed) {
+      problems.push(
+        `${block.querySelector("h4").textContent} 被压缩 ${Math.round(actual)}<${Math.round(needed)}`,
+      );
     }
     const top = block.getBoundingClientRect().top;
     if (prevBottom !== null && top + 1 < prevBottom) {
@@ -120,12 +147,42 @@ requestAnimationFrame(() => {
     }
     prevBottom = block.getBoundingClientRect().bottom;
   }
+  return { label, problems, blocks };
+}
 
-  const verdict = document.getElementById("verdict");
-  verdict.dataset.ok = String(problems.length === 0);
-  verdict.textContent = problems.length === 0
-    ? `无重叠、无压缩 — ${blocks.length} 个输出块，列可滚动高度 ${container.scrollHeight}px / 可视 ${container.clientHeight}px`
-    : `问题：${problems.join("；")}`;
+// Everything stays collapsed unless ?expand=1 is passed, so the default
+// screenshot shows the state the user actually opens the panel in.
+const EXPAND_ALL = new URLSearchParams(location.search).has("expand");
+
+requestAnimationFrame(() => {
+  const collapsed = measure("折叠态");
+  if (!EXPAND_ALL) {
+    const verdict = document.getElementById("verdict");
+    verdict.dataset.ok = String(collapsed.problems.length === 0);
+    verdict.textContent = collapsed.problems.length === 0
+      ? `默认折叠态：${collapsed.blocks.length} 块紧凑排列，无重叠。` +
+        `列内容 ${container.scrollHeight}px / 可视 ${container.clientHeight}px（另加 ?expand=1 可验证全部展开）`
+      : `问题：${collapsed.problems.map((p) => `[折叠] ${p}`).join("；")}`;
+    return;
+  }
+  for (const block of container.querySelectorAll(".yue2-output")) {
+    if (block.dataset.collapsed === "true") {
+      block.querySelector(".yue2-toggle").click();
+    }
+  }
+  requestAnimationFrame(() => {
+    const expanded = measure("展开态");
+    const problems = [
+      ...collapsed.problems.map((p) => `[折叠] ${p}`),
+      ...expanded.problems.map((p) => `[展开] ${p}`),
+    ];
+    const verdict = document.getElementById("verdict");
+    verdict.dataset.ok = String(problems.length === 0);
+    verdict.textContent = problems.length === 0
+      ? `折叠态：${collapsed.blocks.length} 块紧凑排列，无重叠；` +
+        `展开态：全部撑开、无重叠。列可滚动 ${container.scrollHeight}px / 可视 ${container.clientHeight}px`
+      : `问题：${problems.join("；")}`;
+  });
 });
 </script>
 </body>

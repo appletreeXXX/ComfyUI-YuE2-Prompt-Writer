@@ -287,6 +287,32 @@ button {
   padding: 8px 12px;
   background: var(--yue2-surface-alt);
   border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  cursor: pointer;
+  user-select: none;
+}
+
+.yue2-output-head:hover {
+  background: var(--yue2-purple-soft);
+}
+
+.yue2-output-head:focus-visible {
+  outline: 2px solid var(--yue2-purple);
+  outline-offset: -2px;
+}
+
+/* Points right when collapsed, down when expanded. */
+.yue2-chevron {
+  flex: 0 0 auto;
+  width: 0;
+  height: 0;
+  border-left: 5px solid var(--yue2-text-muted);
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  transition: transform 0.15s ease;
+}
+
+.yue2-output-head[aria-expanded="true"] .yue2-chevron {
+  transform: rotate(90deg);
 }
 
 .yue2-output-head h4 {
@@ -359,13 +385,15 @@ button {
   color: var(--yue2-text);
 }
 
-/* Long output is collapsed by default and can be expanded in place, so a
-   single block can never push the rest of the panel out of reach. */
+/* Every block collapses the same way: the header stays as a compact row and
+   the body is hidden, so the panel reads as a tidy list of the six outputs
+   instead of one long sheet that buries the blocks below it. */
+.yue2-output[data-collapsed="true"] .yue2-output-head {
+  border-bottom-color: transparent;
+}
+
 .yue2-output[data-collapsed="true"] pre {
-  max-height: 220px;
-  overflow: hidden;
-  -webkit-mask-image: linear-gradient(180deg, #000 70%, transparent 100%);
-  mask-image: linear-gradient(180deg, #000 70%, transparent 100%);
+  display: none;
 }
 
 .yue2-toggle {
@@ -381,11 +409,13 @@ button {
   font: 500 12px/1.4 var(--yue2-font);
   white-space: nowrap;
   cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
 .yue2-toggle:hover {
   background: var(--yue2-surface-alt);
   color: var(--yue2-text);
+  border-color: rgba(0, 0, 0, 0.24);
 }
 
 .yue2-toggle:focus-visible {

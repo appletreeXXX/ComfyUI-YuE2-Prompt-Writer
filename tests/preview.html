@@ -35,9 +35,9 @@
   <div class="yue2-column" id="outputs"></div>
 </div>
 <script>
-// Mirror of renderResult()'s structure, with a short and a long payload so both
-// the normal and the collapsed path are visible at once.
-const COLLAPSE_THRESHOLD = 600;
+// Mirror of renderResult()'s structure: every block collapses the same way and
+// starts collapsed. One short and one long payload, so the screenshot shows
+// that a short block collapses too (rather than only long ones).
 const OUTPUTS = [
   { key: "short", title: "① Style 提示词" },
   { key: "long", title: "⑤ YuE2 JSON" },
@@ -56,33 +56,36 @@ for (const output of OUTPUTS) {
   const value = output.key === "short" ? SHORT : LONG;
   const block = document.createElement("div");
   block.className = "yue2-output";
-  const collapsible = value.length > COLLAPSE_THRESHOLD;
-  if (collapsible) block.dataset.collapsed = "true";
+  block.dataset.collapsed = "true";
   block.innerHTML = `
-    <div class="yue2-output-head">
+    <div class="yue2-output-head" role="button" tabindex="0" aria-expanded="false">
+      <span class="yue2-chevron" aria-hidden="true"></span>
       <h4>${output.title}</h4>
       <span class="yue2-spacer"></span>
-      ${collapsible ? `<button type="button" class="yue2-toggle" data-expanded="false" aria-expanded="false">展开全文</button>` : ""}
+      <button type="button" class="yue2-toggle" data-expanded="false">展开</button>
       <button type="button" class="yue2-copy">复制</button>
     </div>
     <pre></pre>`;
   block.querySelector("pre").textContent = value;
 
+  const head = block.querySelector(".yue2-output-head");
   const toggleButton = block.querySelector(".yue2-toggle");
-  if (toggleButton) {
-    toggleButton.addEventListener("click", () => {
-      const collapsed = block.dataset.collapsed === "true";
-      if (collapsed) {
-        delete block.dataset.collapsed;
-        toggleButton.textContent = "收起";
-        toggleButton.dataset.expanded = "true";
-      } else {
-        block.dataset.collapsed = "true";
-        toggleButton.textContent = "展开全文";
-        toggleButton.dataset.expanded = "false";
-      }
-    });
-  }
+  const setExpanded = (next) => {
+    if (next) delete block.dataset.collapsed;
+    else block.dataset.collapsed = "true";
+    toggleButton.textContent = next ? "收起" : "展开";
+    toggleButton.dataset.expanded = String(next);
+    head.setAttribute("aria-expanded", String(next));
+  };
+  toggleButton.addEventListener("click", (e) => {
+    e.stopPropagation();
+    setExpanded(block.dataset.collapsed === "true");
+  });
+  head.addEventListener("click", (e) => {
+    if (e.target.closest(".yue2-copy")) return;
+    setExpanded(block.dataset.collapsed === "true");
+  });
+
   const copyButton = block.querySelector(".yue2-copy");
   copyButton.addEventListener("click", () => {
     copyButton.textContent = "已复制";
@@ -94,6 +97,20 @@ for (const output of OUTPUTS) {
   });
   container.appendChild(block);
 }
+
+// Expand both so the screenshot captures the collapsed list AND the expanded
+// body in one frame: the long JSON proves nothing is clipped, the short one
+// proves a short block expands too.
+requestAnimationFrame(() => {
+  for (const block of container.querySelectorAll(".yue2-output")) {
+    block.querySelector(".yue2-toggle").click();
+  }
+  const pre = container.querySelector("pre");
+  requestAnimationFrame(() => {
+    document.querySelector("h1").textContent =
+      `展开态 — 长块 ${LONG.length} 字符，pre 可视 ${Math.round(pre.getBoundingClientRect().height)}px / 滚动 ${pre.scrollHeight}px，完整 = ${pre.scrollHeight <= pre.getBoundingClientRect().height + 1}`;
+  });
+});
 </script>
 </body>
 </html>

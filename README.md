@@ -339,16 +339,28 @@ python tests/run_local_model_check.py --idea "雨夜开车"  # 一次加载跑�
 
 两个页面直接 `<link>` 真实的 `web/styles/yue2.css`，在浏览器里打开即可：
 
-- `tests/preview.html` — 单个输出块：确认「复制」按钮可见、长内容折叠/展开正常。
+- `tests/preview.html` — 单个输出块：确认「复制」按钮可见、折叠/展开正常，
+  且**短内容也能折叠**（不是只有长块才有折叠控件）。
 - `tests/preview-panel.html` — 完整面板（header + 固定高双列 + 6 个输出块）：
   页面会把量化结论写进顶部横幅，判定每个块是否被压缩或与相邻块重叠。
   内容超过面板高度时，**必须由列的滚动条承载，而不是把块压扁**。
+  默认呈现折叠态；加 `?expand=1` 会先全部展开，用来验证展开后仍无重叠。
 
 ```bash
 # Windows，用系统自带的 Edge，无需安装任何依赖
 msedge --headless=new --window-size=760,1100 --screenshot out.png tests/preview.html
 msedge --headless=new --window-size=1100,780 --screenshot panel.png tests/preview-panel.html
+msedge --headless=new --window-size=1100,780 --screenshot expanded.png "tests/preview-panel.html?expand=1"
 ```
+
+### 输出区交互
+
+六个输出块（① Style 提示词 … ⑥ Python 调用片段）**行为完全一致**：
+
+- 默认全部**折叠**成一行标题条，面板高度可预期，任何一块都不会把下面的块埋掉。
+- 点击标题栏任意处，或点「展开」按钮，都可展开；展开状态在本面板存活期间保留，
+  重新生成输出不会把你的展开选择重置。
+- 标题栏同时是键盘可达的（`Tab` 聚焦、`Enter`/`Space` 切换），带 `aria-expanded`。
 
 `run_local_model_check.py` 是可选的实机冒烟测试：挑一个真实 GGUF 加载到 GPU，分别计时
 加载 / 生成 / 卸载，并确认卸载后显存回到基线。加 `--idea "一句主题"` 会一次加载连着跑完
