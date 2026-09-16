@@ -11,6 +11,13 @@
 架构与交互方式参考 [duckyshell/ComfyUI-MiniMaxH3-Prompt-Writer](https://github.com/duckyshell/ComfyUI-MiniMaxH3-Prompt-Writer)：
 一个浮动工作台面板 + 内置写作契约（guide）+ 可插拔的写作模型 provider。
 
+> **关于本仓库的代码状态。** 上游仓库最初只推送了 8 个根文件，`backend/`、`guides/`、
+> `web/`、`tests/` 四个目录没有上传，导致 ComfyUI 加载时必然报
+> `ModuleNotFoundError: No module named '...ComfyUI-YuE2-Prompt-Writer.backend'`。
+> 因此 `backend/`、`guides/`、`web/`、`tests/` 下的实现是依据本 README 与
+> `CHANGELOG.md` 所描述的架构**重新实现**的，并非原作者的原始代码。
+> 上游作者重新推送原始代码后，本目录的对应文件应被替换。
+
 ---
 
 ## 它解决什么问题
@@ -261,46 +268,61 @@ VAE 可选官方两个版本：`YuE2-Vae`（默认，音质更好）与 `YuE2-Va
 ```text
 __init__.py              # WEB_DIRECTORY = "./web"，注册 models/LLM，导入 routes 注册端点
 backend/
-  catalog.py             # 曲风 / 人声 / 语言 / cot 目录（英文风格标签）
+  version.py             # 版本唯一来源（pyproject.toml 与 __init__.py 都读它）
+  catalog.py             # 35 个曲风预设 + 人声 / 情绪 / 速度 / 篇幅 / 语言 / cot 目录
   lyrics.py              # 歌词解析、规范化、语言检测、声部分配（纯函数）
   guides.py              # 内置指南加载 + sha256 完整性校验
   assembly.py            # 组装模型请求、清洗回复、生成三件套与回退 style
-  routes.py              # ComfyUI aiohttp 端点
+  routes.py              # ComfyUI aiohttp 端点，前缀 /yue2_prompt_writer
   models/
-    contract.py          # provider 契约与设置校验（local / ollama / openai）
-    local_backend.py     # 进程内加载 models/LLM 的 GGUF，生成后卸载
+    contract.py          # 设置校验（local / ollama / openai）+ 回复提取
+    local_backend.py     # 进程内加载 models/LLM 的 GGUF，含 GGUF 头部解析与显存估算
     ollama_backend.py    # Ollama /api/chat
     openai_backend.py    # OpenAI 兼容 /chat/completions
     _http.py             # 共享的 aiohttp 请求与错误映射
-guides/                  # 冻结的《YuE2 Style Prompt Writing Guide》
-web/                     # 浮动工作台（原生 JS，无构建步骤）
-tests/                   # 断言套件 + 实机冒烟测试
+guides/                  # 冻结的两份契约（style 提示词 + 歌词写作），sha256 锁定
+web/                     # 浮动工作台（原生 ES 模块，无构建步骤）
+  main.js                # launcher + 双栏面板 + 六块可复制输出
+  api/yue2.js            # 端点客户端
+  styles/yue2.css        # 样式
+tests/                   # 离线检查脚本
 ```
 
-跑测试：
+跑测试（不需要 pytest、ComfyUI 或额外依赖）：
 
 ```bash
-python tests/run_tests.py                      # 纯逻辑，零依赖
+python tests/run_all.py                        # 依次跑完全部检查
+python tests/run_tests.py                      # 歌词引擎（纯逻辑）
+python tests/check_guides.py                   # 指南完整性与必需规则
+python tests/check_assembly.py                 # 请求组装、style 清洗、设置校验
+python tests/check_extension_load.py           # 按 ComfyUI 的方式导入扩展、核对端点
+python tests/check_gguf.py                     # GGUF 扫描与显存估算（跑真实模型目录）
 python tests/run_api_tests.py                  # HTTP 端到端，需要 aiohttp（ComfyUI 自带）
 python tests/run_local_model_check.py --list   # 列出 models/LLM 的 GGUF 与显存估算
 python tests/run_local_model_check.py          # 真实加载 + 生成 + 卸载（需要 GPU）
+python tests/run_local_model_check.py --idea "雨夜开车"  # 一次加载跑完主题 → 歌词 → 提示词
 ```
 
-`tests/run_tests.py` 的 **101** 项检查覆盖歌词解析与段落编号规则、语言检测、声部分配、brief 校验
-（含工作台默认载荷这一整组字段）、style 清洗、模型回复容错（含思考字段与被截断的 JSON）、歌词写作
-契约、歌词回复解析（严格 JSON / 未转义换行 / 裸歌词单三种兜底）、歌词质量提示、官方示例往返、指南
-完整性、provider 设置不外泄密钥、GGUF 模型扫描、显存估算、长歌词压缩、版本一致性、路由与前端
-端点对齐、全量语法解析。不需要 pytest、ComfyUI 或 aiohttp。
+`tests/run_all.py` 会跳过需要 Node 的前端语法检查（`check_frontend.mjs`）如果 PATH 里没有 `node`。
 
-`tests/run_api_tests.py` 的 **110** 项检查把 `backend/routes.py` **按 ComfyUI 的方式真正启动起来**
-（用一个 stub `server` 模块提供 `PromptServer.instance.routes`），再用真实 HTTP 请求跑完全部端点：
-健康检查、目录、指南（含未知 id 的 404）、本地 plan（含工作台默认载荷）、本地模型清单与卸载、
-provider 探针、idea→歌词，以及 generate 全流程。它自带两个 mock 模型服务（Ollama 与 OpenAI 兼容
-两种方言），因此还能验证：请求构造（system 消息嵌入内置指南、禁止思考字段、`required tag:
-Mandarin`、json 模式、temperature）、响应解析，以及 provider 不可达 / 本地模型缺失 / 模型只输出
-思考 / 回复被截断这些失败路径的回退，还有 style 中泄漏歌词的清洗。缺少 aiohttp 时它会自行跳过。
+各检查脚本覆盖的内容：
 
-`tests/run_local_model_check.py` 是可选的实机冒烟测试：挑一个真实 GGUF 加载到 GPU，分别计时
+- `run_tests.py` — 歌词解析与段落编号规则（重复段落不编号）、中英日韩粤语检测、声部分配、
+  `auto` 哨兵值不当作语言、style 清洗、质量提示、时长估算、空输入。
+- `check_guides.py` — 两份指南的 sha256 校验，以及必需规则确实存在于正文中。
+- `check_assembly.py` — 工作台默认载荷整组字段、未知值拒绝、style 清洗（CJK 与句子片段剔除、
+  去重、片段上限）、JSON 回复容错（围栏 / 夹在散文里 / 未转义换行）、思考字段丢弃、
+  六块输出齐全、官方 JSON 字段集、长歌词压缩、设置校验与 `api_key` 不外泄。
+- `check_extension_load.py` — 用 stub `server` 与 `folder_paths` 复现 ComfyUI 的
+  `load_custom_node`，确认 9 个后端模块全部导入、14 个端点全部注册、前端资源就位。
+- `check_gguf.py` — 真实 `models/LLM` 目录的扫描耗时、GGUF 头部解析、投影器排除、
+  显存估算随 `n_ctx` 变化、部分卸载。
+- `run_api_tests.py` — 把 `backend/routes.py` 真正启动起来跑真实 HTTP，覆盖健康检查、
+  目录、指南（含 404）、plan、歌词分析、本地预览、模型清单、provider 探针（含不可达）、
+  generate 的回退路径、`api_key` 不出现在响应体里。
+- `check_frontend.mjs` — 前端 ES 模块语法、模板字符串与 CSS 括号配平。
+
+`run_local_model_check.py` 是可选的实机冒烟测试：挑一个真实 GGUF 加载到 GPU，分别计时
 加载 / 生成 / 卸载，并确认卸载后显存回到基线。加 `--idea "一句主题"` 会一次加载连着跑完
 **主题 → 歌词 → 提示词**。
 

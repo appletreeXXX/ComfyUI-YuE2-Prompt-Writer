@@ -1,5 +1,48 @@
 # Changelog
 
+## 0.3.0 — source actually published
+
+Up to `561ca41` this repository tracked **8 root files and nothing else**.
+`backend/`, `guides/`, `web/` and `tests/` were never committed, so every install
+died on the first line of `__init__.py`:
+
+```
+ModuleNotFoundError: No module named '...ComfyUI-YuE2-Prompt-Writer.backend'
+[IMPORT FAILED] E:\ComfyUI\ComfyUI\custom_nodes\ComfyUI-YuE2-Prompt-Writer
+```
+
+The code described below is now committed in full — 35 files, ~6.8k lines. It was
+reimplemented against the contracts this CHANGELOG and the README already spelled
+out (module layout, endpoint names, route prefix, the `auto` sentinel, the
+SHA-256-pinned guides, the section-numbering rule, non-empty fallbacks), using
+`ComfyUI-MiniMaxH3-Prompt-Writer` — the implementation this README names as its
+architectural reference — as the model for the provider layer and the GGUF reader.
+It is functionally equivalent, **not** the original author's source.
+
+### Fixed since 0.3.0 was written
+
+- **`backend/lyricist.py` folded into `backend/lyrics.py` + `backend/assembly.py`.**
+  Idea-to-lyrics ends up at `POST /yue2_prompt_writer/lyrics` exactly as
+  documented; the split is by responsibility (engine vs. prompt assembly), not by
+  feature.
+- **The `auto` sentinel no longer leaks into user-visible text.** A generated sheet
+  could come back with `你要求的是 auto，但检测到更像 Mandarin`; `analyze_payload()`
+  now treats `auto` as "no preference" at the source.
+- **GGUF listing reads the metadata block only.** Walking every tensor entry with
+  `gguf.GGUFReader` costs seconds per multi-GB file; skipping the tensor index takes
+  a real 9-model / ~90 GB folder from >120 s to under a second (measured here: 3
+  models in 0.45 s).
+
+### Verified
+
+- Replays ComfyUI's own `load_custom_node()` with stub `server` / `folder_paths`:
+  all 9 backend modules import, all 14 routes register.
+- `tests/run_all.py` — 7 check scripts, all green.
+- Real GPU run on `qwen3.5-9b`: idea → lyrics 37.4 s, style prompt 14.0 s
+  (15 fragments, `Mandarin` tag correctly placed, no CJK leakage); VRAM back to
+  baseline after unload; `qwen3.8-27b` (11.13 GB est.) correctly marked `too_large`
+  against 10.78 GB free.
+
 ## 0.3.0
 
 Idea-to-lyrics, plus two fixes that the new end-to-end run exposed.
